@@ -828,6 +828,8 @@ let currentUser = null;
 let currentSort = "new";
 let allPosts = [];
 let openComments = new Set();
+let myProfile = null; // { displayName, photoURL, isDeveloper }
+const userCache = new Map(); // uid -> { displayName, photoURL, isDeveloper }
 
 const authArea = document.getElementById("authArea");
 const composerCard = document.getElementById("composerCard");
@@ -854,6 +856,31 @@ function initials(name) {
   return (parts[0][0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
 }
 
+function avatarHtml(name, photoURL, sizePx) {
+  const size = sizePx || 26;
+  if (photoURL) {
+    return `<span class="avatar-circle" style="width:${size}px;height:${size}px;padding:0;overflow:hidden;"><img src="${escapeHtml(photoURL)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></span>`;
+  }
+  return `<span class="avatar-circle" style="width:${size}px;height:${size}px;font-size:${Math.max(10, size * 0.4)}px;">${initials(name)}</span>`;
+}
+
+async function getUserProfile(uid) {
+  if (userCache.has(uid)) return userCache.get(uid);
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    const data = snap.exists() ? snap.data() : {};
+    const profile = {
+      displayName: data.displayName || null,
+      photoURL: data.photoURL || null,
+      isDeveloper: data.isDeveloper === true
+    };
+    userCache.set(uid, profile);
+    return profile;
+  } catch (err) {
+    return { displayName: null, photoURL: null, isDeveloper: false };
+  }
+}
+
 function timeAgo(ts) {
   if (!ts) return "just now";
   const date = ts.toDate ? ts.toDate() : new Date(ts);
@@ -878,13 +905,16 @@ function escapeHtml(str) {
 
 function renderAuthArea() {
   if (currentUser) {
+    const photoURL = myProfile && myProfile.photoURL;
+    const name = (myProfile && myProfile.displayName) || currentUser.displayName || currentUser.email;
     authArea.innerHTML = `
-      <div class="avatar-pill" id="userPill">
-        <span class="avatar-circle">${initials(currentUser.displayName || currentUser.email)}</span>
-        <span>${escapeHtml(currentUser.displayName || currentUser.email.split("@")[0])}</span>
+      <div class="avatar-pill" id="userPill" style="cursor:pointer;">
+        ${avatarHtml(name, photoURL, 26)}
+        <span>${escapeHtml(name.split("@")[0])}</span>
       </div>
       <button class="btn btn-ghost btn-danger" id="signOutBtn">Sign out</button>
     `;
+    document.getElementById("userPill").addEventListener("click", openProfileModal);
     document.getElementById("signOutBtn").addEventListener("click", () => signOut(auth));
     composerCard.style.display = "block";
   } else {
@@ -995,6 +1025,178 @@ function closeAuthModal() {
   modalRoot.innerHTML = "";
 }
 
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5MB raw file cap, before compression
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const AVATAR_MAX_DIMENSION = 300; // px, longest side after resize
+const FIRESTORE_FIELD_SAFE_BYTES = 700 * 1024; // stay safely under Firestore's 1MB field cap
+
+function compressImageToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      let { width, height } = img;
+      if (width > height && width > AVATAR_MAX_DIMENSION) {
+        height = Math.round(height * (AVATAR_MAX_DIMENSION / width));
+        width = AVATAR_MAX_DIMENSION;
+      } else if (height > AVATAR_MAX_DIMENSION) {
+        width = Math.round(width * (AVATAR_MAX_DIMENSION / height));
+        height = AVATAR_MAX_DIMENSION;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+
+      let quality = 0.85;
+      let dataUrl = canvas.toDataURL("image/jpeg", quality);
+
+      while (dataUrl.length > FIRESTORE_FIELD_SAFE_BYTES && quality > 0.3) {
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL("image/jpeg", quality);
+      }
+
+      if (dataUrl.length > FIRESTORE_FIELD_SAFE_BYTES) {
+        reject(new Error("Image is too detailed to compress small enough. Try a simpler image."));
+        return;
+      }
+
+      resolve(dataUrl);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Couldn't read that image file."));
+    };
+
+    img.src = objectUrl;
+  });
+}
+
+function openProfileModal() {
+  if (!currentUser) return;
+  const name = (myProfile && myProfile.displayName) || currentUser.displayName || "";
+  const photoURL = myProfile && myProfile.photoURL;
+
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal shimmer-surface" id="profileModal">
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+        <h2 class="display">Your profile</h2>
+        <p class="sub">Update your photo or display name.</p>
+
+        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:6px;">
+          <div id="avatarPreviewWrap">${avatarHtml(name, photoURL, 88)}</div>
+          <input type="file" id="avatarFileInput" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;">
+          <button class="btn btn-ghost" id="choosePhotoBtn" type="button">Change photo</button>
+          <span style="font-size:0.78rem;color:var(--ink-soft);">JPG, PNG, WEBP or GIF. Max 5MB, auto-resized.</span>
+        </div>
+
+        <label for="profileNameInput">Display name</label>
+        <input type="text" id="profileNameInput" maxlength="30" value="${escapeHtml(name)}">
+
+        <div class="auth-error" id="profileErrorBox"></div>
+
+        <button class="btn btn-primary" id="saveProfileBtn">Save changes</button>
+      </div>
+    </div>
+  `;
+
+  const backdrop = document.getElementById("modalBackdrop");
+  const closeBtn = document.getElementById("modalCloseBtn");
+  const fileInput = document.getElementById("avatarFileInput");
+  const chooseBtn = document.getElementById("choosePhotoBtn");
+  const saveBtn = document.getElementById("saveProfileBtn");
+  const errorBox = document.getElementById("profileErrorBox");
+  const previewWrap = document.getElementById("avatarPreviewWrap");
+
+  setTimeout(() => playShimmer(document.getElementById("profileModal")), 50);
+
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeAuthModal(); });
+  closeBtn.addEventListener("click", closeAuthModal);
+  chooseBtn.addEventListener("click", () => fileInput.click());
+
+  let pendingDataUrl = null;
+
+  fileInput.addEventListener("change", async () => {
+    errorBox.classList.remove("show");
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      errorBox.textContent = "Please choose a JPG, PNG, WEBP, or GIF image.";
+      errorBox.classList.add("show");
+      fileInput.value = "";
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      errorBox.textContent = "That image is too large. Max size is 5MB.";
+      errorBox.classList.add("show");
+      fileInput.value = "";
+      return;
+    }
+
+    chooseBtn.disabled = true;
+    chooseBtn.textContent = "Processing...";
+
+    try {
+      const dataUrl = await compressImageToBase64(file);
+      pendingDataUrl = dataUrl;
+      previewWrap.innerHTML = `<span class="avatar-circle" style="width:88px;height:88px;padding:0;overflow:hidden;"><img src="${dataUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></span>`;
+    } catch (err) {
+      errorBox.textContent = err.message || "Couldn't process that image.";
+      errorBox.classList.add("show");
+      fileInput.value = "";
+    } finally {
+      chooseBtn.disabled = false;
+      chooseBtn.textContent = "Change photo";
+    }
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    errorBox.classList.remove("show");
+    const newName = document.getElementById("profileNameInput").value.trim();
+    if (!newName) {
+      errorBox.textContent = "Please choose a display name.";
+      errorBox.classList.add("show");
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+
+    try {
+      const newPhotoURL = pendingDataUrl || (myProfile && myProfile.photoURL) || null;
+
+      await updateProfile(currentUser, { displayName: newName });
+      await setDoc(doc(db, "users", currentUser.uid), {
+        displayName: newName,
+        photoURL: newPhotoURL,
+        email: currentUser.email
+      }, { merge: true });
+
+      myProfile = { ...(myProfile || {}), displayName: newName, photoURL: newPhotoURL };
+      userCache.set(currentUser.uid, { ...(userCache.get(currentUser.uid) || {}), displayName: newName, photoURL: newPhotoURL, isDeveloper: (myProfile && myProfile.isDeveloper) || false });
+
+      renderAuthArea();
+      closeAuthModal();
+      showToast("Profile updated");
+    } catch (err) {
+      errorBox.textContent = "Couldn't save changes. Please try again.";
+      errorBox.classList.add("show");
+      console.error(err);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save changes";
+    }
+  });
+}
+
 /* ---------------- POSTS ---------------- */
 
 document.getElementById("cancelPostBtn").addEventListener("click", () => {
@@ -1074,13 +1276,17 @@ function renderPost(post) {
   const userVote = post._myVote || 0;
   const isCommentsOpen = openComments.has(post.id);
   const comments = post._comments || [];
+  const liveAuthor = userCache.get(post.authorId);
+  const authorName = (liveAuthor && liveAuthor.displayName) || post.authorName;
+  const authorPhoto = liveAuthor && liveAuthor.photoURL;
+  const authorIsDev = liveAuthor ? liveAuthor.isDeveloper : post.authorIsDeveloper;
 
   return `
     <div class="post" data-id="${post.id}">
       <div class="post-meta">
-        <span class="avatar-circle" style="width:18px;height:18px;font-size:0.6rem;">${initials(post.authorName)}</span>
-        <span>${escapeHtml(post.authorName || "Someone")}</span>
-        ${post.authorIsDeveloper ? `<img src="Icons/devicon.png" alt="Developer" title="Developer" style="width:14px;height:14px;border-radius:4px;vertical-align:middle;">` : ""}
+        ${avatarHtml(authorName, authorPhoto, 18)}
+        <span>${escapeHtml(authorName || "Someone")}</span>
+        ${authorIsDev ? `<img src="Icons/devicon.png" alt="Developer" title="Developer" style="width:14px;height:14px;border-radius:4px;vertical-align:middle;">` : ""}
         <span class="sep">&middot;</span>
         <span>${timeAgo(post.createdAt)}</span>
       </div>
@@ -1098,15 +1304,21 @@ function renderPost(post) {
         ${currentUser && currentUser.uid === post.authorId ? `<button class="icon-btn delete-post" data-id="${post.id}">🗑 Delete</button>` : ""}
       </div>
       <div class="comments ${isCommentsOpen ? "open" : ""}" id="comments-${post.id}">
-        ${comments.map(c => `
+        ${comments.map(c => {
+          const liveC = userCache.get(c.authorId);
+          const cName = (liveC && liveC.displayName) || c.authorName;
+          const cPhoto = liveC && liveC.photoURL;
+          const cIsDev = liveC ? liveC.isDeveloper : c.authorIsDeveloper;
+          return `
           <div class="comment">
-            <span class="avatar-circle">${initials(c.authorName)}</span>
+            ${avatarHtml(cName, cPhoto, 22)}
             <div class="comment-body">
-              <div class="comment-meta">${escapeHtml(c.authorName || "Someone")} ${c.authorIsDeveloper ? `<img src="Icons/devicon.png" alt="Developer" title="Developer" style="width:12px;height:12px;border-radius:3px;vertical-align:middle;">` : ""} &middot; ${timeAgo(c.createdAt)}</div>
+              <div class="comment-meta">${escapeHtml(cName || "Someone")} ${cIsDev ? `<img src="Icons/devicon.png" alt="Developer" title="Developer" style="width:12px;height:12px;border-radius:3px;vertical-align:middle;">` : ""} &middot; ${timeAgo(c.createdAt)}</div>
               <div class="comment-text">${escapeHtml(c.text)}</div>
             </div>
           </div>
-        `).join("")}
+        `;
+        }).join("")}
         ${currentUser ? `
           <div class="comment-form">
             <input type="text" placeholder="Add a comment&hellip;" maxlength="500" id="commentInput-${post.id}">
@@ -1230,6 +1442,9 @@ function listenToPosts() {
     posts.forEach(p => {
       listenToComments(p.id);
       if (currentUser) listenToMyVote(p.id);
+      if (!userCache.has(p.authorId)) {
+        getUserProfile(p.authorId).then(() => renderFeed());
+      }
     });
   });
 }
@@ -1241,6 +1456,17 @@ function listenToComments(postId) {
   commentUnsubs[postId] = onSnapshot(q, (snap) => {
     const comments = [];
     snap.forEach(d => comments.push(d.data()));
+    comments.forEach(c => {
+      if (c.authorId && !userCache.has(c.authorId)) {
+        getUserProfile(c.authorId).then(() => {
+          const p = allPosts.find(pp => pp.id === postId);
+          if (p && openComments.has(postId)) {
+            const root = document.querySelector(`.post[data-id="${postId}"]`);
+            if (root) { root.outerHTML = renderPost(p); attachPostListeners(postId); }
+          }
+        });
+      }
+    });
     const post = allPosts.find(p => p.id === postId);
     if (post) {
       post._comments = comments;
@@ -1277,8 +1503,13 @@ function listenToMyVote(postId) {
 
 /* ---------------- AUTH STATE ---------------- */
 
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   currentUser = user;
+  myProfile = null;
+  if (user) {
+    myProfile = await getUserProfile(user.uid);
+    userCache.set(user.uid, myProfile);
+  }
   renderAuthArea();
   if (user) {
     allPosts.forEach(p => listenToMyVote(p.id));
