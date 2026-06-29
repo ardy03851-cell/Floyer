@@ -865,20 +865,72 @@ function avatarHtml(name, photoURL, sizePx) {
 }
 
 async function getUserProfile(uid) {
-  if (userCache.has(uid)) return userCache.get(uid);
-  try {
-    const snap = await getDoc(doc(db, "users", uid));
-    const data = snap.exists() ? snap.data() : {};
-    const profile = {
-      displayName: data.displayName || null,
-      photoURL: data.photoURL || null,
-      isDeveloper: data.isDeveloper === true
-    };
-    userCache.set(uid, profile);
-    return profile;
-  } catch (err) {
-    return { displayName: null, photoURL: null, isDeveloper: false };
-  }
+  if (userCache.has(uid)) return userCache.get(uid);
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    const data = snap.exists() ? snap.data() : {};
+    const profile = {
+      displayName: data.displayName || null,
+      photoURL: data.photoURL || null,
+      isDeveloper: data.isDeveloper === true,
+      isVerifiedOverride: data.isVerifiedOverride === true,
+      postCount: data.postCount || 0,
+      totalUpvotes: data.totalUpvotes || 0,
+      equippedBadges: Array.isArray(data.equippedBadges) ? data.equippedBadges : []
+    };
+    userCache.set(uid, profile);
+    return profile;
+  } catch (err) {
+    return { displayName: null, photoURL: null, isDeveloper: false, isVerifiedOverride: false, postCount: 0, totalUpvotes: 0, equippedBadges: [] };
+  }
+}
+
+
+
+
+const BADGE_INFO = {
+  verified: { label: "Verified", icon: "Bdg/verified.png" },
+  popular:  { label: "Popular",  icon: "Bdg/popular.png" },
+  super:    { label: "Super Poster", icon: "Bdg/super.png" }
+};
+const POPULAR_UPVOTE_THRESHOLD = 100;
+const SUPER_POST_THRESHOLD = 50;
+const VERIFIED_DAYS_REQUIRED = 7;
+
+
+
+
+function getEarnedBadges(profile, authUser) {
+  const earned = [];
+  const accountCreatedAt = authUser && authUser.metadata && authUser.metadata.creationTime
+    ? new Date(authUser.metadata.creationTime) : null;
+  const daysSinceCreation = accountCreatedAt ? (Date.now() - accountCreatedAt.getTime()) / (1000 * 60 * 60 * 24) : 0;
+
+
+
+
+  if ((profile && profile.isVerifiedOverride) || daysSinceCreation >= VERIFIED_DAYS_REQUIRED) {
+    earned.push("verified");
+  }
+  if (profile && profile.totalUpvotes >= POPULAR_UPVOTE_THRESHOLD) {
+    earned.push("popular");
+  }
+  if (profile && profile.postCount >= SUPER_POST_THRESHOLD) {
+    earned.push("super");
+  }
+  return earned;
+}
+
+
+
+
+function badgeRowHtml(equippedBadges, sizePx) {
+  const size = sizePx || 14;
+  if (!equippedBadges || equippedBadges.length === 0) return "";
+  return equippedBadges
+    .filter(key => BADGE_INFO[key])
+    .map(key => `<img src="${BADGE_INFO[key].icon}" alt="${BADGE_INFO[key].label}" title="${BADGE_INFO[key].label}" style="width:${size}px;height:${size}px;vertical-align:middle;margin-left:2px;">`)
+    .join("");
 }
 
 function timeAgo(ts) {
@@ -907,10 +959,12 @@ function renderAuthArea() {
   if (currentUser) {
     const photoURL = myProfile && myProfile.photoURL;
     const name = (myProfile && myProfile.displayName) || currentUser.displayName || currentUser.email;
+    const myEquipped = (myProfile && myProfile.equippedBadges) || [];
     authArea.innerHTML = `
       <div class="avatar-pill" id="userPill" style="cursor:pointer;">
         ${avatarHtml(name, photoURL, 26)}
         <span>${escapeHtml(name.split("@")[0])}</span>
+        ${badgeRowHtml(myEquipped, 14)}
       </div>
       <button class="btn btn-ghost btn-danger" id="signOutBtn">Sign out</button>
     `;
@@ -1100,12 +1154,58 @@ function openProfileModal() {
         <label for="profileNameInput">Display name</label>
         <input type="text" id="profileNameInput" maxlength="30" value="${escapeHtml(name)}">
 
+        <label>Badges (equip up to 2)</label>
+        <div id="badgeGrid" style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;"></div>
+
         <div class="auth-error" id="profileErrorBox"></div>
 
         <button class="btn btn-primary" id="saveProfileBtn">Save changes</button>
       </div>
     </div>
   `;
+
+  const earnedBadgeKeys = getEarnedBadges(myProfile, currentUser);
+  let equippedSet = new Set((myProfile && myProfile.equippedBadges) || []);
+  const badgeGrid = document.getElementById("badgeGrid");
+
+  function renderBadgeGrid() {
+    if (earnedBadgeKeys.length === 0) {
+      badgeGrid.innerHTML = `<span style="font-size:0.82rem;color:var(--ink-soft);">No badges earned yet. Keep posting and engaging to unlock some.</span>`;
+      return;
+    }
+    badgeGrid.innerHTML = earnedBadgeKeys.map(key => {
+      const info = BADGE_INFO[key];
+      const isEquipped = equippedSet.has(key);
+      return `
+        <button type="button" class="badge-toggle" data-key="${key}" style="
+          display:flex;flex-direction:column;align-items:center;gap:4px;
+          border:1px solid ${isEquipped ? "var(--vein)" : "var(--seam)"};
+          background:${isEquipped ? "rgba(142,151,168,0.12)" : "var(--floor)"};
+          border-radius:12px;padding:8px 12px;min-width:72px;">
+          <img src="${info.icon}" alt="${info.label}" style="width:32px;height:32px;">
+          <span style="font-size:0.72rem;font-weight:600;color:var(--ink-soft);">${info.label}</span>
+        </button>
+      `;
+    }).join("");
+
+    badgeGrid.querySelectorAll(".badge-toggle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.key;
+        if (equippedSet.has(key)) {
+          equippedSet.delete(key);
+        } else {
+          if (equippedSet.size >= 2) {
+            showToast("You can only equip 2 badges at once");
+            return;
+          }
+          equippedSet.add(key);
+        }
+        renderBadgeGrid();
+      });
+    });
+  }
+
+  renderBadgeGrid();
 
   const backdrop = document.getElementById("modalBackdrop");
   const closeBtn = document.getElementById("modalCloseBtn");
@@ -1173,15 +1273,18 @@ function openProfileModal() {
     try {
       const newPhotoURL = pendingDataUrl || (myProfile && myProfile.photoURL) || null;
 
+      const finalEquipped = Array.from(equippedSet).slice(0, 2);
+
       await updateProfile(currentUser, { displayName: newName });
       await setDoc(doc(db, "users", currentUser.uid), {
         displayName: newName,
         photoURL: newPhotoURL,
-        email: currentUser.email
+        email: currentUser.email,
+        equippedBadges: finalEquipped
       }, { merge: true });
 
-      myProfile = { ...(myProfile || {}), displayName: newName, photoURL: newPhotoURL };
-      userCache.set(currentUser.uid, { ...(userCache.get(currentUser.uid) || {}), displayName: newName, photoURL: newPhotoURL, isDeveloper: (myProfile && myProfile.isDeveloper) || false });
+      myProfile = { ...(myProfile || {}), displayName: newName, photoURL: newPhotoURL, equippedBadges: finalEquipped };
+      userCache.set(currentUser.uid, { ...(userCache.get(currentUser.uid) || {}), displayName: newName, photoURL: newPhotoURL, isDeveloper: (myProfile && myProfile.isDeveloper) || false, equippedBadges: finalEquipped });
 
       renderAuthArea();
       closeAuthModal();
@@ -1219,15 +1322,21 @@ document.getElementById("submitPostBtn").addEventListener("click", async () => {
   try {
     const myUserSnap = await getDoc(doc(db, "users", currentUser.uid));
     const myIsDeveloper = myUserSnap.exists() && myUserSnap.data().isDeveloper === true;
+    const myEquippedNow = myUserSnap.exists() && Array.isArray(myUserSnap.data().equippedBadges) ? myUserSnap.data().equippedBadges : [];
     await addDoc(collection(db, "posts"), {
       title, body,
       authorId: currentUser.uid,
       authorName: currentUser.displayName || currentUser.email.split("@")[0],
       authorIsDeveloper: myIsDeveloper,
+      authorEquippedBadges: myEquippedNow,
       createdAt: serverTimestamp(),
       score: 0,
       commentCount: 0
     });
+    await setDoc(doc(db, "users", currentUser.uid), { postCount: increment(1) }, { merge: true });
+    if (myProfile) myProfile.postCount = (myProfile.postCount || 0) + 1;
+    const cachedMe = userCache.get(currentUser.uid);
+    if (cachedMe) cachedMe.postCount = (cachedMe.postCount || 0) + 1;
     titleEl.value = "";
     bodyEl.value = "";
     playShimmer(composerCard);
@@ -1287,6 +1396,7 @@ function renderPost(post) {
         ${avatarHtml(authorName, authorPhoto, 18)}
         <span>${escapeHtml(authorName || "Someone")}</span>
         ${authorIsDev ? `<img src="Icons/devicon.png" alt="Developer" title="Developer" style="width:14px;height:14px;border-radius:4px;vertical-align:middle;">` : ""}
+        ${badgeRowHtml(liveAuthor ? liveAuthor.equippedBadges : post.authorEquippedBadges, 14)}
         <span class="sep">&middot;</span>
         <span>${timeAgo(post.createdAt)}</span>
       </div>
@@ -1313,7 +1423,7 @@ function renderPost(post) {
           <div class="comment">
             ${avatarHtml(cName, cPhoto, 22)}
             <div class="comment-body">
-              <div class="comment-meta">${escapeHtml(cName || "Someone")} ${cIsDev ? `<img src="Icons/devicon.png" alt="Developer" title="Developer" style="width:12px;height:12px;border-radius:3px;vertical-align:middle;">` : ""} &middot; ${timeAgo(c.createdAt)}</div>
+              <div class="comment-meta">${escapeHtml(cName || "Someone")} ${cIsDev ? `<img src="Icons/devicon.png" alt="Developer" title="Developer" style="width:12px;height:12px;border-radius:3px;vertical-align:middle;">` : ""} ${badgeRowHtml(liveC ? liveC.equippedBadges : c.authorEquippedBadges, 12)} &middot; ${timeAgo(c.createdAt)}</div>
               <div class="comment-text">${escapeHtml(c.text)}</div>
             </div>
           </div>
@@ -1381,6 +1491,13 @@ async function handleVote(postId, dir) {
   const newVote = existing === dir ? 0 : dir;
   const delta = newVote - existing;
 
+  // Only "upvotes received" count toward the popular badge — track the +1 state transition specifically.
+  const wasUpvoted = existing === 1;
+  const isNowUpvoted = newVote === 1;
+  let upvoteDelta = 0;
+  if (!wasUpvoted && isNowUpvoted) upvoteDelta = 1;
+  else if (wasUpvoted && !isNowUpvoted) upvoteDelta = -1;
+
   try {
     if (newVote === 0) {
       await deleteDoc(voteRef);
@@ -1388,6 +1505,11 @@ async function handleVote(postId, dir) {
       await setDoc(voteRef, { value: newVote });
     }
     await updateDoc(doc(db, "posts", postId), { score: increment(delta) });
+    if (upvoteDelta !== 0 && post.authorId) {
+      await setDoc(doc(db, "users", post.authorId), { totalUpvotes: increment(upvoteDelta) }, { merge: true });
+      const cachedAuthor = userCache.get(post.authorId);
+      if (cachedAuthor) cachedAuthor.totalUpvotes = (cachedAuthor.totalUpvotes || 0) + upvoteDelta;
+    }
   } catch (err) {
     showToast("Couldn't register vote");
   }
@@ -1408,6 +1530,7 @@ async function submitComment(postId) {
       authorId: currentUser.uid,
       authorName: currentUser.displayName || currentUser.email.split("@")[0],
       authorIsDeveloper: myIsDeveloper,
+      authorEquippedBadges: (myProfile && myProfile.equippedBadges) || [],
       createdAt: serverTimestamp()
     });
     await updateDoc(doc(db, "posts", postId), { commentCount: increment(1) });
