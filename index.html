@@ -250,7 +250,7 @@
       animation: votePop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
-    /* ---------- topbar ---------- */
+    /* ---------- top bar ---------- */
     .topbar {
       position: sticky;
       top: 0;
@@ -530,6 +530,69 @@
       margin: 0 0 12px 0;
       white-space: pre-wrap;
       word-break: break-word;
+    }
+
+    .post-media {
+      margin-bottom: 12px;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: var(--seam);
+      max-height: 420px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .post-media img {
+      width: 100%;
+      max-height: 420px;
+      object-fit: contain;
+      display: block;
+      border-radius: var(--radius-sm);
+    }
+
+    .post-media video {
+      width: 100%;
+      max-height: 420px;
+      border-radius: var(--radius-sm);
+      outline: none;
+    }
+
+    .media-preview-wrap {
+      margin-top: 10px;
+      position: relative;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: var(--seam);
+      max-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .media-preview-wrap img,
+    .media-preview-wrap video {
+      max-width: 100%;
+      max-height: 200px;
+      object-fit: contain;
+      border-radius: var(--radius-sm);
+    }
+
+    .media-remove-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      border: none;
+      background: rgba(43, 42, 40, 0.65);
+      color: #fff;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
     }
 
     .post-actions {
@@ -898,7 +961,10 @@
     <div class="composer" id="composerCard" style="display:none;">
       <input type="text" id="postTitle" placeholder="Give it a title&hellip;" maxlength="140">
       <textarea id="postBody" placeholder="What's on your floor today?" maxlength="3000"></textarea>
+      <input type="file" id="postMediaInput" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" style="display:none;">
+      <div id="postMediaPreview"></div>
       <div class="composer-foot">
+        <button class="btn btn-ghost" id="attachMediaBtn" type="button" style="padding:9px 12px;">📎 Attach</button>
         <span class="composer-hint" id="composerHint"></span>
         <button class="btn btn-ghost" id="cancelPostBtn" type="button">Clear</button>
         <button class="btn btn-primary" id="submitPostBtn" type="button">Post</button>
@@ -1270,6 +1336,46 @@ function compressImageToBase64(file) {
   });
 }
 
+const MAX_POST_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_POST_VIDEO_BYTES = 8 * 1024 * 1024;
+const POST_IMAGE_MAX_DIM = 1200;
+const POST_IMAGE_QUALITY = 0.82;
+const POST_FIRESTORE_SAFE = 900 * 1024;
+
+function compressPostImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > POST_IMAGE_MAX_DIM || height > POST_IMAGE_MAX_DIM) {
+        if (width > height) { height = Math.round(height * POST_IMAGE_MAX_DIM / width); width = POST_IMAGE_MAX_DIM; }
+        else { width = Math.round(width * POST_IMAGE_MAX_DIM / height); height = POST_IMAGE_MAX_DIM; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      let q = POST_IMAGE_QUALITY;
+      let dataUrl = canvas.toDataURL("image/jpeg", q);
+      while (dataUrl.length > POST_FIRESTORE_SAFE && q > 0.3) { q -= 0.08; dataUrl = canvas.toDataURL("image/jpeg", q); }
+      if (dataUrl.length > POST_FIRESTORE_SAFE) { reject(new Error("Image too large to attach even after compression. Try a smaller image.")); return; }
+      resolve(dataUrl);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Couldn't read image.")); };
+    img.src = url;
+  });
+}
+
+function encodeVideoToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Couldn't read video."));
+    reader.readAsDataURL(file);
+  });
+}
+
 function openProfileModal() {
   if (!currentUser) return;
   const name = (myProfile && myProfile.displayName) || currentUser.displayName || "";
@@ -1499,9 +1605,59 @@ function openProfileModal() {
 
 /* ---------------- POSTS ---------------- */
 
+let pendingPostMedia = null; // { dataUrl, type: "image"|"video" }
+
+document.getElementById("attachMediaBtn").addEventListener("click", () => {
+  document.getElementById("postMediaInput").click();
+});
+
+document.getElementById("postMediaInput").addEventListener("change", async () => {
+  const file = document.getElementById("postMediaInput").files[0];
+  const preview = document.getElementById("postMediaPreview");
+  if (!file) return;
+
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+
+  if (!isImage && !isVideo) { showToast("Only images and videos are supported."); return; }
+  if (isImage && file.size > MAX_POST_IMAGE_BYTES) { showToast("Image must be under 10MB."); document.getElementById("postMediaInput").value = ""; return; }
+  if (isVideo && file.size > MAX_POST_VIDEO_BYTES) { showToast("Video must be under 8MB to attach."); document.getElementById("postMediaInput").value = ""; return; }
+
+  document.getElementById("attachMediaBtn").disabled = true;
+  document.getElementById("attachMediaBtn").textContent = "Processing...";
+
+  try {
+    let dataUrl;
+    if (isImage) {
+      dataUrl = await compressPostImage(file);
+    } else {
+      dataUrl = await encodeVideoToBase64(file);
+    }
+    pendingPostMedia = { dataUrl, type: isImage ? "image" : "video" };
+    const mediaEl = isImage
+      ? `<img src="${dataUrl}" alt="Attached image">`
+      : `<video src="${dataUrl}" controls muted playsinline></video>`;
+    preview.innerHTML = `<div class="media-preview-wrap">${mediaEl}<button class="media-remove-btn" id="removeMediaBtn">&times;</button></div>`;
+    document.getElementById("removeMediaBtn").addEventListener("click", () => {
+      pendingPostMedia = null;
+      preview.innerHTML = "";
+      document.getElementById("postMediaInput").value = "";
+    });
+  } catch (err) {
+    showToast(err.message || "Couldn't attach media.");
+    document.getElementById("postMediaInput").value = "";
+  } finally {
+    document.getElementById("attachMediaBtn").disabled = false;
+    document.getElementById("attachMediaBtn").textContent = "📎 Attach";
+  }
+});
+
 document.getElementById("cancelPostBtn").addEventListener("click", () => {
   document.getElementById("postTitle").value = "";
   document.getElementById("postBody").value = "";
+  pendingPostMedia = null;
+  document.getElementById("postMediaPreview").innerHTML = "";
+  document.getElementById("postMediaInput").value = "";
 });
 
 document.getElementById("submitPostBtn").addEventListener("click", async () => {
@@ -1520,7 +1676,7 @@ document.getElementById("submitPostBtn").addEventListener("click", async () => {
     const myUserSnap = await getDoc(doc(db, "users", currentUser.uid));
     const myIsDeveloper = myUserSnap.exists() && myUserSnap.data().isDeveloper === true;
     const myEquippedNow = myUserSnap.exists() && Array.isArray(myUserSnap.data().equippedBadges) ? myUserSnap.data().equippedBadges : [];
-    await addDoc(collection(db, "posts"), {
+    const postData = {
       title, body,
       authorId: currentUser.uid,
       authorName: currentUser.displayName || currentUser.email.split("@")[0],
@@ -1529,13 +1685,21 @@ document.getElementById("submitPostBtn").addEventListener("click", async () => {
       createdAt: serverTimestamp(),
       score: 0,
       commentCount: 0
-    });
+    };
+    if (pendingPostMedia) {
+      postData.mediaData = pendingPostMedia.dataUrl;
+      postData.mediaType = pendingPostMedia.type;
+    }
+    await addDoc(collection(db, "posts"), postData);
     await setDoc(doc(db, "users", currentUser.uid), { postCount: increment(1) }, { merge: true });
     if (myProfile) myProfile.postCount = (myProfile.postCount || 0) + 1;
     const cachedMe = userCache.get(currentUser.uid);
     if (cachedMe) cachedMe.postCount = (cachedMe.postCount || 0) + 1;
     titleEl.value = "";
     bodyEl.value = "";
+    pendingPostMedia = null;
+    document.getElementById("postMediaPreview").innerHTML = "";
+    document.getElementById("postMediaInput").value = "";
     playShimmer(composerCard);
     showToast("Posted to the floor");
   } catch (err) {
@@ -1599,6 +1763,8 @@ function renderPost(post) {
       </div>
       <h3>${escapeHtml(post.title)}</h3>
       ${post.body ? `<p class="body">${escapeHtml(post.body)}</p>` : ""}
+      ${post.mediaData && post.mediaType === "image" ? `<div class="post-media"><img src="${post.mediaData}" alt="Post image" loading="lazy"></div>` : ""}
+      ${post.mediaData && post.mediaType === "video" ? `<div class="post-media"><video src="${post.mediaData}" controls muted playsinline preload="metadata"></video></div>` : ""}
       <div class="post-actions">
         <div class="vote-group">
           <button class="vote-btn upvote ${userVote === 1 ? "voted" : ""}" data-id="${post.id}" aria-label="Upvote">&#9650;</button>
