@@ -101,16 +101,10 @@
       }
     }
 
-
-
-
     .shimmer-surface {
       position: relative;
       overflow: hidden;
     }
-
-
-
 
     .shimmer-surface::after {
       content: "";
@@ -129,15 +123,9 @@
       opacity: 0;
     }
 
-
-
-
     .shimmer-surface.shimmer-play::after {
       animation: sweep 1.1s ease-out forwards;
     }
-
-
-
 
     /* ---------- modal entrance ---------- */
     @keyframes backdropIn {
@@ -162,22 +150,13 @@
       }
     }
 
-
-
-
     .modal-backdrop {
       animation: backdropIn 0.18s ease-out forwards;
     }
 
-
-
-
     .modal {
       animation: modalIn 0.22s cubic-bezier(0.34, 1.36, 0.64, 1) forwards;
     }
-
-
-
 
     /* ---------- post feed entrance ---------- */
     @keyframes postIn {
@@ -192,15 +171,9 @@
       }
     }
 
-
-
-
     .post {
       animation: postIn 0.28s ease-out both;
     }
-
-
-
 
     /* ---------- comment slide ---------- */
     @keyframes commentsSlide {
@@ -217,16 +190,10 @@
       }
     }
 
-
-
-
     .comments.open {
       animation: commentsSlide 0.28s ease-out forwards;
       overflow: hidden;
     }
-
-
-
 
     /* ---------- vote pop ---------- */
     @keyframes votePop {
@@ -242,9 +209,6 @@
         transform: scale(1);
       }
     }
-
-
-
 
     .vote-btn.pop {
       animation: votePop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -964,7 +928,7 @@
       <input type="file" id="postMediaInput" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" style="display:none;">
       <div id="postMediaPreview"></div>
       <div class="composer-foot">
-        <button class="btn btn-ghost" id="attachMediaBtn" type="button" style="padding:9px 12px;">📎 Attach</button>
+        <button class="btn btn-ghost" id="attachMediaBtn" type="button" style="padding:9px 12px;display:flex;align-items:center;gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Attach</button>
         <span class="composer-hint" id="composerHint"></span>
         <button class="btn btn-ghost" id="cancelPostBtn" type="button">Clear</button>
         <button class="btn btn-primary" id="submitPostBtn" type="button">Post</button>
@@ -1040,6 +1004,7 @@ function playShimmer(el) {
   el.classList.remove("shimmer-play");
   void el.offsetWidth;
   el.classList.add("shimmer-play");
+  el.addEventListener("animationend", () => el.classList.remove("shimmer-play"), { once: true });
 }
 
 function initials(name) {
@@ -1648,7 +1613,7 @@ document.getElementById("postMediaInput").addEventListener("change", async () =>
     document.getElementById("postMediaInput").value = "";
   } finally {
     document.getElementById("attachMediaBtn").disabled = false;
-    document.getElementById("attachMediaBtn").textContent = "📎 Attach";
+    document.getElementById("attachMediaBtn").innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Attach';
   }
 });
 
@@ -1765,6 +1730,13 @@ function renderPost(post) {
       ${post.body ? `<p class="body">${escapeHtml(post.body)}</p>` : ""}
       ${post.mediaData && post.mediaType === "image" ? `<div class="post-media"><img src="${post.mediaData}" alt="Post image" loading="lazy"></div>` : ""}
       ${post.mediaData && post.mediaType === "video" ? `<div class="post-media"><video src="${post.mediaData}" controls muted playsinline preload="metadata"></video></div>` : ""}
+      <div class="reaction-bar" id="reactions-${post.id}">
+        ${(["🔥","❤️","😂","😮","👏"]).map(emoji => {
+          const count = (post._reactions && post._reactions[emoji]) || 0;
+          const reacted = post._myReaction === emoji;
+          return `<button class="reaction-btn${reacted ? " reacted" : ""}" data-emoji="${emoji}" data-id="${post.id}">${emoji}${count > 0 ? ` <span>${count}</span>` : ""}</button>`;
+        }).join("")}
+      </div>
       <div class="post-actions">
         <div class="vote-group">
           <button class="vote-btn upvote ${userVote === 1 ? "voted" : ""}" data-id="${post.id}" aria-label="Upvote">&#9650;</button>
@@ -1806,6 +1778,10 @@ function renderPost(post) {
 function attachPostListeners(postId) {
   const root = document.querySelector(`.post[data-id="${postId}"]`);
   if (!root) return;
+
+  root.querySelectorAll(".reaction-btn").forEach(btn => {
+    btn.addEventListener("click", () => handleReaction(postId, btn.dataset.emoji, btn));
+  });
 
   root.querySelector(".upvote").addEventListener("click", (e) => {
     e.currentTarget.classList.remove("pop");
@@ -1937,6 +1913,7 @@ function listenToPosts() {
 
     posts.forEach(p => {
       listenToComments(p.id);
+      listenToReactions(p.id);
       if (currentUser) listenToMyVote(p.id);
       if (!userCache.has(p.authorId)) {
         getUserProfile(p.authorId).then(() => renderFeed());
@@ -1980,6 +1957,52 @@ function listenToComments(postId) {
   });
 }
 
+const reactionUnsubs = {};
+const REACTION_EMOJIS = ["🔥","❤️","😂","😮","👏"];
+
+function listenToReactions(postId) {
+  if (reactionUnsubs[postId]) return;
+  reactionUnsubs[postId] = onSnapshot(
+    collection(db, "posts", postId, "reactions"),
+    (snap) => {
+      const post = allPosts.find(p => p.id === postId);
+      if (!post) return;
+      const counts = {};
+      snap.forEach(d => {
+        const v = d.data().emoji;
+        if (v) counts[v] = (counts[v] || 0) + 1;
+      });
+      post._reactions = counts;
+      post._myReaction = currentUser
+        ? (snap.docs.find(d => d.id === currentUser.uid)?.data().emoji || null)
+        : null;
+      const bar = document.getElementById(`reactions-${postId}`);
+      if (bar) {
+        bar.innerHTML = REACTION_EMOJIS.map(emoji => {
+          const count = counts[emoji] || 0;
+          const reacted = post._myReaction === emoji;
+          return `<button class="reaction-btn${reacted ? " reacted" : ""}" data-emoji="${emoji}" data-id="${postId}">${emoji}${count > 0 ? ` <span>${count}</span>` : ""}</button>`;
+        }).join("");
+        bar.querySelectorAll(".reaction-btn").forEach(btn => {
+          btn.addEventListener("click", () => handleReaction(postId, btn.dataset.emoji, btn));
+        });
+      }
+    }
+  );
+}
+
+async function handleReaction(postId, emoji, btn) {
+  if (!currentUser) return openAuthModal("signin");
+  btn.classList.remove("pop"); void btn.offsetWidth; btn.classList.add("pop");
+  const post = allPosts.find(p => p.id === postId);
+  const reactionRef = doc(db, "posts", postId, "reactions", currentUser.uid);
+  const isSame = post && post._myReaction === emoji;
+  try {
+    if (isSame) { await deleteDoc(reactionRef); }
+    else { await setDoc(reactionRef, { emoji, uid: currentUser.uid }); }
+  } catch (err) { showToast("Couldn't save reaction"); }
+}
+
 const voteUnsubs = {};
 function listenToMyVote(postId) {
   if (!currentUser || voteUnsubs[postId]) return;
@@ -1990,8 +2013,12 @@ function listenToMyVote(postId) {
       post._myVote = snap.exists() ? snap.data().value : 0;
       const root = document.querySelector(`.post[data-id="${postId}"]`);
       if (root) {
-        root.outerHTML = renderPost(post);
-        attachPostListeners(postId);
+        const upBtn = root.querySelector(".upvote");
+        const downBtn = root.querySelector(".downvote");
+        const countEl = root.querySelector(".vote-count");
+        if (upBtn) upBtn.classList.toggle("voted", post._myVote === 1);
+        if (downBtn) downBtn.classList.toggle("voted", post._myVote === -1);
+        if (countEl) countEl.textContent = post.score || 0;
       }
     }
   });
