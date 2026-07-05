@@ -92,17 +92,25 @@
     @keyframes sweep {
       0% {
         transform: translateX(-120%) rotate(8deg);
+        opacity: 1;
       }
 
       100% {
         transform: translateX(220%) rotate(8deg);
+        opacity: 0;
       }
     }
+
+
+
 
     .shimmer-surface {
       position: relative;
       overflow: hidden;
     }
+
+
+
 
     .shimmer-surface::after {
       content: "";
@@ -121,9 +129,125 @@
       opacity: 0;
     }
 
+
+
+
     .shimmer-surface.shimmer-play::after {
-      opacity: 1;
-      animation: sweep 1.1s ease-out;
+      animation: sweep 1.1s ease-out forwards;
+    }
+
+
+
+
+    /* ---------- modal entrance ---------- */
+    @keyframes backdropIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes modalIn {
+      from {
+        opacity: 0;
+        transform: scale(0.94) translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+
+
+
+    .modal-backdrop {
+      animation: backdropIn 0.18s ease-out forwards;
+    }
+
+
+
+
+    .modal {
+      animation: modalIn 0.22s cubic-bezier(0.34, 1.36, 0.64, 1) forwards;
+    }
+
+
+
+
+    /* ---------- post feed entrance ---------- */
+    @keyframes postIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+
+
+
+    .post {
+      animation: postIn 0.28s ease-out both;
+    }
+
+
+
+
+    /* ---------- comment slide ---------- */
+    @keyframes commentsSlide {
+      from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-4px);
+      }
+
+      to {
+        opacity: 1;
+        max-height: 2000px;
+        transform: translateY(0);
+      }
+    }
+
+
+
+
+    .comments.open {
+      animation: commentsSlide 0.28s ease-out forwards;
+      overflow: hidden;
+    }
+
+
+
+
+    /* ---------- vote pop ---------- */
+    @keyframes votePop {
+      0% {
+        transform: scale(1);
+      }
+
+      40% {
+        transform: scale(1.35);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+
+
+
+    .vote-btn.pop {
+      animation: votePop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     /* ---------- top bar ---------- */
@@ -485,6 +609,7 @@
 
     .comments.open {
       display: block;
+      overflow: hidden;
     }
 
     .comment {
@@ -596,6 +721,7 @@
       justify-content: center;
       z-index: 100;
       padding: 20px;
+      animation: backdropIn 0.18s ease-out forwards;
     }
 
     .modal {
@@ -856,12 +982,18 @@ function initials(name) {
   return (parts[0][0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
 }
 
-function avatarHtml(name, photoURL, sizePx) {
+function avatarHtml(name, photoURL, sizePx, avatarBorder) {
   const size = sizePx || 26;
+  const borderStyles = {
+    none:   "",
+    ring:   `box-shadow:0 0 0 2px var(--vein);`,
+    double: `box-shadow:0 0 0 2px var(--floor),0 0 0 4px var(--vein);`
+  };
+  const borderStyle = borderStyles[avatarBorder] || "";
   if (photoURL) {
-    return `<span class="avatar-circle" style="width:${size}px;height:${size}px;padding:0;overflow:hidden;"><img src="${escapeHtml(photoURL)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></span>`;
+    return `<span class="avatar-circle" style="width:${size}px;height:${size}px;padding:0;overflow:hidden;${borderStyle}"><img src="${escapeHtml(photoURL)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></span>`;
   }
-  return `<span class="avatar-circle" style="width:${size}px;height:${size}px;font-size:${Math.max(10, size * 0.4)}px;">${initials(name)}</span>`;
+  return `<span class="avatar-circle" style="width:${size}px;height:${size}px;font-size:${Math.max(10, size * 0.4)}px;${borderStyle}">${initials(name)}</span>`;
 }
 
 async function getUserProfile(uid) {
@@ -869,24 +1001,24 @@ async function getUserProfile(uid) {
   try {
     const snap = await getDoc(doc(db, "users", uid));
     const data = snap.exists() ? snap.data() : {};
-    const profile = {
-      displayName: data.displayName || null,
-      photoURL: data.photoURL || null,
-      isDeveloper: data.isDeveloper === true,
-      isVerifiedOverride: data.isVerifiedOverride === true,
-      postCount: data.postCount || 0,
-      totalUpvotes: data.totalUpvotes || 0,
-      equippedBadges: Array.isArray(data.equippedBadges) ? data.equippedBadges : []
-    };
-    userCache.set(uid, profile);
-    return profile;
-  } catch (err) {
-    return { displayName: null, photoURL: null, isDeveloper: false, isVerifiedOverride: false, postCount: 0, totalUpvotes: 0, equippedBadges: [] };
-  }
+    const profile = {
+      displayName: data.displayName || null,
+      photoURL: data.photoURL || null,
+      isDeveloper: data.isDeveloper === true,
+      isVerifiedOverride: data.isVerifiedOverride === true,
+      postCount: data.postCount || 0,
+      totalUpvotes: data.totalUpvotes || 0,
+      equippedBadges: Array.isArray(data.equippedBadges) ? data.equippedBadges : [],
+      bio: data.bio || "",
+      accentColor: data.accentColor || null,
+      avatarBorder: data.avatarBorder || "none"
+    };
+    userCache.set(uid, profile);
+    return profile;
+  } catch (err) {
+    return { displayName: null, photoURL: null, isDeveloper: false, isVerifiedOverride: false, postCount: 0, totalUpvotes: 0, equippedBadges: [], bio: "", accentColor: null, avatarBorder: "none" };
+  }
 }
-
-
-
 
 const BADGE_INFO = {
   verified: { label: "Verified", icon: "Bdg/verified.png" },
@@ -897,17 +1029,11 @@ const POPULAR_UPVOTE_THRESHOLD = 100;
 const SUPER_POST_THRESHOLD = 50;
 const VERIFIED_DAYS_REQUIRED = 7;
 
-
-
-
 function getEarnedBadges(profile, authUser) {
   const earned = [];
   const accountCreatedAt = authUser && authUser.metadata && authUser.metadata.creationTime
     ? new Date(authUser.metadata.creationTime) : null;
   const daysSinceCreation = accountCreatedAt ? (Date.now() - accountCreatedAt.getTime()) / (1000 * 60 * 60 * 24) : 0;
-
-
-
 
   if ((profile && profile.isVerifiedOverride) || daysSinceCreation >= VERIFIED_DAYS_REQUIRED) {
     earned.push("verified");
@@ -920,9 +1046,6 @@ function getEarnedBadges(profile, authUser) {
   }
   return earned;
 }
-
-
-
 
 function badgeRowHtml(equippedBadges, sizePx) {
   const size = sizePx || 14;
@@ -955,14 +1078,29 @@ function escapeHtml(str) {
 
 /* ---------------- AUTH UI ---------------- */
 
+function applyAccentColor(color) {
+  const ACCENTS = {
+    slate:  ["#8E97A8", "#6F7A8E"],
+    rose:   ["#B07080", "#8E5565"],
+    sage:   ["#7A9E87", "#5C7D69"],
+    amber:  ["#A8946A", "#8A7450"],
+    plum:   ["#9B7FAE", "#7A618C"],
+    ink:    ["#6B6862", "#4A4742"]
+  };
+  const pair = ACCENTS[color] || ACCENTS["slate"];
+  document.documentElement.style.setProperty("--vein", pair[0]);
+  document.documentElement.style.setProperty("--vein-deep", pair[1]);
+}
+
 function renderAuthArea() {
   if (currentUser) {
     const photoURL = myProfile && myProfile.photoURL;
     const name = (myProfile && myProfile.displayName) || currentUser.displayName || currentUser.email;
     const myEquipped = (myProfile && myProfile.equippedBadges) || [];
+    if (myProfile && myProfile.accentColor) applyAccentColor(myProfile.accentColor);
     authArea.innerHTML = `
       <div class="avatar-pill" id="userPill" style="cursor:pointer;">
-        ${avatarHtml(name, photoURL, 26)}
+        ${avatarHtml(name, photoURL, 26, myProfile && myProfile.avatarBorder)}
         <span>${escapeHtml(name.split("@")[0])}</span>
         ${badgeRowHtml(myEquipped, 14)}
       </div>
@@ -1154,6 +1292,33 @@ function openProfileModal() {
         <label for="profileNameInput">Display name</label>
         <input type="text" id="profileNameInput" maxlength="30" value="${escapeHtml(name)}">
 
+        <label for="profileBioInput">Bio <span style="font-weight:400;opacity:0.6;">(120 chars)</span></label>
+        <input type="text" id="profileBioInput" maxlength="120" placeholder="Say something about yourself&hellip;" value="${escapeHtml((myProfile && myProfile.bio) || "")}">
+
+        <label>Accent colour</label>
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;" id="accentPicker">
+          ${[
+            { key:"slate", hex:"#8E97A8", label:"Slate" },
+            { key:"rose",  hex:"#B07080", label:"Rose"  },
+            { key:"sage",  hex:"#7A9E87", label:"Sage"  },
+            { key:"amber", hex:"#A8946A", label:"Amber" },
+            { key:"plum",  hex:"#9B7FAE", label:"Plum"  },
+            { key:"ink",   hex:"#6B6862", label:"Ink"   }
+          ].map(c => {
+            const active = (myProfile && myProfile.accentColor) === c.key || (!myProfile?.accentColor && c.key === "slate");
+            return `<button type="button" data-accent="${c.key}" title="${c.label}" style="width:28px;height:28px;border-radius:50%;background:${c.hex};border:${active ? "3px solid var(--ink)" : "2px solid transparent"};outline:${active ? "2px solid "+c.hex : "none"};outline-offset:2px;transition:transform 0.12s;"></button>`;
+          }).join("")}
+        </div>
+
+        <label>Avatar border</label>
+        <div style="display:flex;gap:8px;margin-top:6px;" id="borderPicker">
+          ${["none","ring","double"].map(style => {
+            const active = (myProfile && myProfile.avatarBorder || "none") === style;
+            const labels = { none:"None", ring:"Ring", double:"Double" };
+            return `<button type="button" data-border="${style}" style="padding:6px 14px;border-radius:999px;border:1px solid ${active ? "var(--vein)" : "var(--seam)"};background:${active ? "rgba(142,151,168,0.12)" : "var(--floor)"};font-size:0.8rem;font-weight:600;color:var(--ink-soft);transition:all 0.12s;">${labels[style]}</button>`;
+          }).join("")}
+        </div>
+
         <label>Badges (equip up to 2)</label>
         <div id="badgeGrid" style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;"></div>
 
@@ -1217,6 +1382,33 @@ function openProfileModal() {
 
   setTimeout(() => playShimmer(document.getElementById("profileModal")), 50);
 
+  let selectedAccent = (myProfile && myProfile.accentColor) || "slate";
+  let selectedBorder = (myProfile && myProfile.avatarBorder) || "none";
+
+  document.getElementById("accentPicker").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-accent]");
+    if (!btn) return;
+    selectedAccent = btn.dataset.accent;
+    document.querySelectorAll("#accentPicker [data-accent]").forEach(b => {
+      const isNow = b.dataset.accent === selectedAccent;
+      b.style.border = isNow ? "3px solid var(--ink)" : "2px solid transparent";
+      b.style.outline = isNow ? `2px solid ${b.style.background}` : "none";
+      b.style.transform = isNow ? "scale(1.15)" : "scale(1)";
+    });
+    applyAccentColor(selectedAccent);
+  });
+
+  document.getElementById("borderPicker").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-border]");
+    if (!btn) return;
+    selectedBorder = btn.dataset.border;
+    document.querySelectorAll("#borderPicker [data-border]").forEach(b => {
+      const isNow = b.dataset.border === selectedBorder;
+      b.style.border = `1px solid ${isNow ? "var(--vein)" : "var(--seam)"}`;
+      b.style.background = isNow ? "rgba(142,151,168,0.12)" : "var(--floor)";
+    });
+  });
+
   backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeAuthModal(); });
   closeBtn.addEventListener("click", closeAuthModal);
   chooseBtn.addEventListener("click", () => fileInput.click());
@@ -1274,17 +1466,22 @@ function openProfileModal() {
       const newPhotoURL = pendingDataUrl || (myProfile && myProfile.photoURL) || null;
 
       const finalEquipped = Array.from(equippedSet).slice(0, 2);
+      const newBio = document.getElementById("profileBioInput").value.trim().slice(0, 120);
 
       await updateProfile(currentUser, { displayName: newName });
       await setDoc(doc(db, "users", currentUser.uid), {
         displayName: newName,
         photoURL: newPhotoURL,
         email: currentUser.email,
-        equippedBadges: finalEquipped
+        equippedBadges: finalEquipped,
+        bio: newBio,
+        accentColor: selectedAccent,
+        avatarBorder: selectedBorder
       }, { merge: true });
 
-      myProfile = { ...(myProfile || {}), displayName: newName, photoURL: newPhotoURL, equippedBadges: finalEquipped };
-      userCache.set(currentUser.uid, { ...(userCache.get(currentUser.uid) || {}), displayName: newName, photoURL: newPhotoURL, isDeveloper: (myProfile && myProfile.isDeveloper) || false, equippedBadges: finalEquipped });
+      myProfile = { ...(myProfile || {}), displayName: newName, photoURL: newPhotoURL, equippedBadges: finalEquipped, bio: newBio, accentColor: selectedAccent, avatarBorder: selectedBorder };
+      userCache.set(currentUser.uid, { ...(userCache.get(currentUser.uid) || {}), displayName: newName, photoURL: newPhotoURL, isDeveloper: (myProfile && myProfile.isDeveloper) || false, equippedBadges: finalEquipped, bio: newBio, accentColor: selectedAccent, avatarBorder: selectedBorder });
+      applyAccentColor(selectedAccent);
 
       renderAuthArea();
       closeAuthModal();
@@ -1393,7 +1590,7 @@ function renderPost(post) {
   return `
     <div class="post" data-id="${post.id}">
       <div class="post-meta">
-        ${avatarHtml(authorName, authorPhoto, 18)}
+        ${avatarHtml(authorName, authorPhoto, 18, liveAuthor && liveAuthor.avatarBorder)}
         <span>${escapeHtml(authorName || "Someone")}</span>
         ${authorIsDev ? `<img src="Icons/devicon.png" alt="Developer" title="Developer" style="width:14px;height:14px;border-radius:4px;vertical-align:middle;">` : ""}
         ${badgeRowHtml(liveAuthor ? liveAuthor.equippedBadges : post.authorEquippedBadges, 14)}
@@ -1421,7 +1618,7 @@ function renderPost(post) {
           const cIsDev = liveC ? liveC.isDeveloper : c.authorIsDeveloper;
           return `
           <div class="comment">
-            ${avatarHtml(cName, cPhoto, 22)}
+            ${avatarHtml(cName, cPhoto, 22, liveC && liveC.avatarBorder)}
             <div class="comment-body">
               <div class="comment-meta">${escapeHtml(cName || "Someone")} ${cIsDev ? `<img src="Icons/devicon.png" alt="Developer" title="Developer" style="width:12px;height:12px;border-radius:3px;vertical-align:middle;">` : ""} ${badgeRowHtml(liveC ? liveC.equippedBadges : c.authorEquippedBadges, 12)} &middot; ${timeAgo(c.createdAt)}</div>
               <div class="comment-text">${escapeHtml(c.text)}</div>
@@ -1444,8 +1641,18 @@ function attachPostListeners(postId) {
   const root = document.querySelector(`.post[data-id="${postId}"]`);
   if (!root) return;
 
-  root.querySelector(".upvote").addEventListener("click", () => handleVote(postId, 1));
-  root.querySelector(".downvote").addEventListener("click", () => handleVote(postId, -1));
+  root.querySelector(".upvote").addEventListener("click", (e) => {
+    e.currentTarget.classList.remove("pop");
+    void e.currentTarget.offsetWidth;
+    e.currentTarget.classList.add("pop");
+    handleVote(postId, 1);
+  });
+  root.querySelector(".downvote").addEventListener("click", (e) => {
+    e.currentTarget.classList.remove("pop");
+    void e.currentTarget.offsetWidth;
+    e.currentTarget.classList.add("pop");
+    handleVote(postId, -1);
+  });
 
   root.querySelector(".comment-toggle").addEventListener("click", () => {
     const panel = document.getElementById(`comments-${postId}`);
