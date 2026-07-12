@@ -1570,6 +1570,8 @@ async function getUserProfile(uid) {
       photoURL: data.photoURL || null,
       isDeveloper: data.isDeveloper === true,
       isVerifiedOverride: data.isVerifiedOverride === true,
+      commentsMade: data.commentsMade || 0,
+      recentPostDates: Array.isArray(data.recentPostDates) ? data.recentPostDates : [],
       pronouns: data.pronouns || "",
       statusLine: data.statusLine || "",
       postCount: data.postCount || 0,
@@ -1582,36 +1584,57 @@ async function getUserProfile(uid) {
     userCache.set(uid, profile);
     return profile;
   } catch (err) {
-    return { displayName: null, photoURL: null, isDeveloper: false, isVerifiedOverride: false, postCount: 0, totalUpvotes: 0, equippedBadges: [], bio: "", accentColor: null, avatarBorder: "none", pronouns: "", statusLine: "" };
+    return { displayName: null, photoURL: null, isDeveloper: false, isVerifiedOverride: false, postCount: 0, totalUpvotes: 0, equippedBadges: [], bio: "", accentColor: null, avatarBorder: "none", pronouns: "", statusLine: "", commentsMade: 0, recentPostDates: [] };
   }
 }
 
 const BADGE_INFO = {
-  verified: { label: "Verified", icon: "Bdg/verified.png" },
-  popular:  { label: "Popular",  icon: "Bdg/popular.png" },
-  super:    { label: "Super Poster", icon: "Bdg/super.png" }
+verified: { label: "Verified", icon: "Bdg/verified.png" },
+popular: { label: "Popular", icon: "Bdg/popular.png" },
+super: { label: "Super Poster", icon: "Bdg/super.png" },
+chatter: { label: "Chatterbox", icon: "Bdg/chatter.png" },
+earlybird: { label: "Early Bird", icon: "Bdg/earlybird.png" },
+streak: { label: "On a Roll", icon: "Bdg/streak.png" }
 };
 const POPULAR_UPVOTE_THRESHOLD = 100;
 const SUPER_POST_THRESHOLD = 50;
 const VERIFIED_DAYS_REQUIRED = 7;
+const CHATTER_COMMENT_THRESHOLD = 25;
+const EARLYBIRD_CUTOFF_DATE = new Date("2026-09-01T00:00:00Z"); // accounts created before this date qualify
+const STREAK_DAYS_REQUIRED = 5;
+const STREAK_WINDOW_DAYS = 7;
 
-function getEarnedBadges(profile, authUser) {
-  const earned = [];
-  const accountCreatedAt = authUser && authUser.metadata && authUser.metadata.creationTime
-    ? new Date(authUser.metadata.creationTime) : null;
-  const daysSinceCreation = accountCreatedAt ? (Date.now() - accountCreatedAt.getTime()) / (1000 * 60 * 60 * 24) : 0;
+function checkPostingStreak(recentPostDates) {
+if (!recentPostDates || recentPostDates.length === 0) return false;
+const now = Date.now();
+const windowMs = STREAK_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+const uniqueDaysInWindow = new Set(
+recentPostDates
+.filter(ts => (now - ts) <= windowMs) .map(ts=> new Date(ts).toDateString())
+  );
+  return uniqueDaysInWindow.size >= STREAK_DAYS_REQUIRED;
+  }
 
-  if ((profile && profile.isVerifiedOverride) || daysSinceCreation >= VERIFIED_DAYS_REQUIRED) {
-    earned.push("verified");
-  }
-  if (profile && profile.totalUpvotes >= POPULAR_UPVOTE_THRESHOLD) {
-    earned.push("popular");
-  }
-  if (profile && profile.postCount >= SUPER_POST_THRESHOLD) {
-    earned.push("super");
-  }
-  return earned;
-}
+  function getEarnedBadges(profile, authUser) {
+  const earned = [];
+  const accountCreatedAt = authUser && authUser.metadata && authUser.metadata.creationTime
+  ? new Date(authUser.metadata.creationTime) : null;
+  const daysSinceCreation = accountCreatedAt ? (Date.now() - accountCreatedAt.getTime()) / (1000 * 60 * 60 * 24) : 0;
+
+  if ((profile && profile.isVerifiedOverride) || daysSinceCreation >= VERIFIED_DAYS_REQUIRED) {
+  earned.push("verified");
+  }
+  if (profile && profile.totalUpvotes >= POPULAR_UPVOTE_THRESHOLD) {
+  earned.push("popular");
+  }
+  if (profile && profile.postCount >= SUPER_POST_THRESHOLD) {
+  earned.push("super");
+  }
+  if (profile && profile.commentsMade >= CHATTER_COMMENT_THRESHOLD) {
+  earned.push("chatter");
+  }
+  if (accountCreatedAt && accountCreatedAt.getTime() <= EARLYBIRD_CUTOFF_DATE.getTime()) { earned.push("earlybird"); }
+    if (profile && checkPostingStreak(profile.recentPostDates)) { earned.push("streak"); } return earned; }
 
 function badgeRowHtml(equippedBadges, sizePx) {
   const size = sizePx || 14;
@@ -2467,8 +2490,14 @@ document.getElementById("submitPostBtn").addEventListener("click", async () => {
     await addDoc(collection(db, "posts"), postData);
     await setDoc(doc(db, "users", currentUser.uid), { postCount: increment(1) }, { merge: true });
     if (myProfile) myProfile.postCount = (myProfile.postCount || 0) + 1;
+
+    const nowTs = Date.now();
+    const prevDates = (myProfile && myProfile.recentPostDates) || [];
+    const updatedDates = [...prevDates, nowTs].filter(ts => (nowTs - ts) <= (STREAK_WINDOW_DAYS * 24 * 60 * 60 * 1000)).slice(-20);
+    await setDoc(doc(db, "users", currentUser.uid), { recentPostDates: updatedDates }, { merge: true });
+    if (myProfile) myProfile.recentPostDates = updatedDates;
     const cachedMe = userCache.get(currentUser.uid);
-    if (cachedMe) cachedMe.postCount = (cachedMe.postCount || 0) + 1;
+    if (cachedMe) { cachedMe.postCount = (cachedMe.postCount || 0) + 1; cachedMe.recentPostDates = updatedDates; }
     titleEl.value = "";
     bodyEl.value = "";
     pendingPostMedia = null;
@@ -2679,6 +2708,10 @@ async function submitComment(postId) {
       createdAt: serverTimestamp()
     });
     await updateDoc(doc(db, "posts", postId), { commentCount: increment(1) });
+    await setDoc(doc(db, "users", currentUser.uid), { commentsMade: increment(1) }, { merge: true });
+    if (myProfile) myProfile.commentsMade = (myProfile.commentsMade || 0) + 1;
+    const cachedMe2 = userCache.get(currentUser.uid);
+    if (cachedMe2) cachedMe2.commentsMade = (cachedMe2.commentsMade || 0) + 1;
     input.value = "";
   } catch (err) {
     showToast("Couldn't post comment");
