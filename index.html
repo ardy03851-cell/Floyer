@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Foyer</title>
   <link rel="icon" type="image/png" href="Icons/icon.png">
-   
+
   <link rel="apple-touch-icon" href="Icons/icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -890,12 +890,6 @@
       }
     }
 
-    @media (max-width: 720px) {
-      .dm-sidebar {
-        width: 100vw;
-      }
-    }
-
     /* iOS Safari zooms in on any input/textarea under 16px on focus — this stops it */
     input,
     textarea,
@@ -911,24 +905,14 @@
       padding-right: env(safe-area-inset-right);
     }
 
-    .dm-input-row {
-      padding-bottom: calc(12px + env(safe-area-inset-bottom));
-    }
-
-    .call-overlay {
-      padding-top: env(safe-area-inset-top);
-      padding-bottom: env(safe-area-inset-bottom);
-    }
-
     /* Prevent double-tap zoom flicker on tap targets across all touch devices */
     .btn,
     .reaction-btn,
     .vote-btn,
     .icon-btn,
-    .inbox-btn,
+    .settings-btn,
     .avatar-pill,
-    .dm-thread-row,
-    .call-ctrl-btn,
+    .toggle-switch,
     .sort-tabs button {
       touch-action: manipulation;
     }
@@ -1018,8 +1002,8 @@
       animation: reactionPop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
-    /* ---------- inbox button ---------- */
-    .inbox-btn {
+    /* ---------- settings button ---------- */
+    .settings-btn {
       position: relative;
       border: 1px solid var(--seam);
       background: linear-gradient(180deg, #FFFFFF, #F7F6F3);
@@ -1036,383 +1020,108 @@
       flex-shrink: 0;
     }
 
-    .inbox-btn:hover {
-      transform: translateY(-1px);
+    .settings-btn:hover {
+      transform: translateY(-1px) rotate(20deg);
       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 4px 10px rgba(60, 55, 45, 0.12);
     }
 
-    .inbox-badge {
-      position: absolute;
-      top: -3px;
-      right: -3px;
-      background: var(--vein-deep);
-      color: #fff;
-      font-size: 0.6rem;
-      font-weight: 700;
-      border-radius: 999px;
-      min-width: 14px;
-      height: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 3px;
-      border: 2px solid var(--floor);
-    }
-
-    /* ---------- DM panel ---------- */
-    .dm-panel {
+    /* ---------- 3D ambient scene (experimental) ---------- */
+    #ambientScene3d {
       position: fixed;
       inset: 0;
-      z-index: 80;
-      display: flex;
+      z-index: -1;
       pointer-events: none;
-    }
-
-    .dm-panel.open {
-      pointer-events: all;
-    }
-
-    .dm-scrim {
-      position: absolute;
-      inset: 0;
-      background: rgba(43, 42, 40, 0.3);
-      backdrop-filter: blur(2px);
       opacity: 0;
-      transition: opacity 0.22s ease;
+      transition: opacity 0.6s ease;
     }
 
-    .dm-panel.open .dm-scrim {
+    #ambientScene3d.active {
       opacity: 1;
     }
 
-    .dm-sidebar {
-      position: absolute;
-      right: 0;
-      top: 0;
-      bottom: 0;
-      width: min(380px, 100vw);
-      background: linear-gradient(180deg, #FFFFFF, #FBFBF9);
-      border-left: 1px solid var(--seam);
-      display: flex;
-      flex-direction: column;
-      transform: translateX(100%);
-      transition: transform 0.28s cubic-bezier(0.34, 1.1, 0.64, 1);
-      box-shadow: -10px 0 30px rgba(60, 55, 45, 0.10);
+    #ambientScene3d canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
     }
 
-    .dm-panel.open .dm-sidebar {
-      transform: translateX(0);
+    .settings-section {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--seam);
     }
 
-    .dm-header {
+    .settings-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 18px 20px 14px;
-      border-bottom: 1px solid var(--seam);
-      flex-shrink: 0;
-    }
-
-    .dm-header h2 {
-      font-size: 1.1rem;
-    }
-
-    .dm-back {
-      border: none;
-      background: var(--seam);
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--ink-soft);
-      cursor: pointer;
-      font-size: 1rem;
-    }
-
-    .dm-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 0;
-    }
-
-    .dm-thread-row {
-      display: flex;
-      align-items: center;
       gap: 12px;
-      padding: 12px 20px;
-      cursor: pointer;
-      border-bottom: 1px solid var(--seam);
-      transition: background 0.12s;
+      padding: 10px 0;
     }
 
-    .dm-thread-row:hover {
-      background: var(--floor);
-    }
-
-    .dm-thread-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .dm-thread-name {
-      font-weight: 600;
-      font-size: 0.92rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .dm-thread-preview {
-      font-size: 0.78rem;
-      color: var(--ink-soft);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-top: 2px;
-    }
-
-    .dm-thread-time {
-      font-size: 0.72rem;
-      color: var(--stone-shadow);
-      flex-shrink: 0;
-    }
-
-    .dm-unread-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--vein-deep);
-      flex-shrink: 0;
-    }
-
-    .dm-compose-row {
-      padding: 14px 20px;
-      border-bottom: 1px solid var(--seam);
-      flex-shrink: 0;
-    }
-
-    .dm-compose-row input {
-      width: 100%;
-      border: 1px solid var(--seam);
-      background: var(--floor);
-      border-radius: 999px;
-      padding: 9px 16px;
-      font-size: 0.88rem;
-      outline: none;
-    }
-
-    .dm-compose-row input:focus {
-      border-color: var(--vein);
-      box-shadow: 0 0 0 3px rgba(142, 151, 168, 0.16);
-    }
-
-    .dm-conversation {
+    .settings-row-text {
       display: flex;
       flex-direction: column;
-      flex: 1;
-      min-height: 0;
+      gap: 2px;
     }
 
-    .dm-messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px 16px 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .dm-msg {
-      max-width: 78%;
-      padding: 9px 14px;
-      border-radius: 18px;
+    .settings-row-title {
       font-size: 0.9rem;
-      line-height: 1.45;
-      word-break: break-word;
-      animation: postIn 0.18s ease-out both;
-    }
-
-    .dm-msg.mine {
-      align-self: flex-end;
-      background: linear-gradient(135deg, var(--vein), var(--vein-deep));
-      color: #fff;
-      border-bottom-right-radius: 5px;
-    }
-
-    .dm-msg.theirs {
-      align-self: flex-start;
-      background: var(--seam);
+      font-weight: 600;
       color: var(--ink);
-      border-bottom-left-radius: 5px;
-    }
-
-    .dm-msg-time {
-      font-size: 0.65rem;
-      opacity: 0.6;
-      margin-top: 3px;
-      text-align: right;
-    }
-
-    .dm-input-row {
       display: flex;
+      align-items: center;
       gap: 8px;
-      padding: 12px 16px;
-      border-top: 1px solid var(--seam);
-      flex-shrink: 0;
     }
 
-    .dm-input-row input {
-      flex: 1;
-      border: 1px solid var(--seam);
-      background: var(--floor);
+    .settings-beta-pill {
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--vein-deep);
+      background: rgba(142, 151, 168, 0.14);
+      border: 1px solid rgba(142, 151, 168, 0.3);
       border-radius: 999px;
-      padding: 10px 16px;
-      font-size: 0.9rem;
-      outline: none;
+      padding: 2px 7px;
     }
 
-    .dm-input-row input:focus {
-      border-color: var(--vein);
-      box-shadow: 0 0 0 3px rgba(142, 151, 168, 0.16);
-    }
-
-    .dm-send-btn {
-      border: none;
-      background: linear-gradient(180deg, var(--vein), var(--vein-deep));
-      color: #fff;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(111, 122, 142, 0.35);
-      transition: transform 0.12s ease;
-    }
-
-    .dm-send-btn:hover {
-      transform: scale(1.08);
-    }
-
-    .dm-empty {
-      padding: 40px 20px;
-      text-align: center;
+    .settings-row-desc {
+      font-size: 0.76rem;
       color: var(--ink-soft);
-      font-size: 0.88rem;
     }
 
-    /* ---------- call overlay ---------- */
-    .call-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 200;
-      background: rgba(20, 19, 18, 0.96);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.22s ease;
-    }
-
-    .call-overlay.active {
-      opacity: 1;
-      pointer-events: all;
-    }
-
-    .call-avatar {
-      width: 90px;
-      height: 90px;
-      border-radius: 50%;
-      background: linear-gradient(160deg, var(--vein), var(--vein-deep));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 2.2rem;
-      color: #fff;
-      font-family: "Fraunces", serif;
-      font-weight: 600;
-      box-shadow: 0 0 0 8px rgba(142, 151, 168, 0.2), 0 0 0 16px rgba(142, 151, 168, 0.1);
-      margin-bottom: 10px;
-    }
-
-    .call-name {
-      font-family: "Fraunces", serif;
-      font-size: 1.5rem;
-      color: #fff;
-      font-weight: 600;
-    }
-
-    .call-status {
-      font-size: 0.88rem;
-      color: rgba(255, 255, 255, 0.55);
-      margin-bottom: 20px;
-    }
-
-    @keyframes pulse {
-
-      0%,
-      100% {
-        box-shadow: 0 0 0 8px rgba(142, 151, 168, 0.2), 0 0 0 16px rgba(142, 151, 168, 0.1);
-      }
-
-      50% {
-        box-shadow: 0 0 0 12px rgba(142, 151, 168, 0.25), 0 0 0 24px rgba(142, 151, 168, 0.08);
-      }
-    }
-
-    .call-overlay.active .call-avatar {
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    .call-controls {
-      display: flex;
-      gap: 20px;
-      margin-top: 10px;
-    }
-
-    .call-ctrl-btn {
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      border: none;
+    .toggle-switch {
+      position: relative;
+      width: 42px;
+      height: 24px;
+      flex-shrink: 0;
+      border-radius: 999px;
+      border: 1px solid var(--seam);
+      background: var(--seam);
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.3rem;
-      transition: transform 0.14s ease, box-shadow 0.14s ease;
+      transition: background 0.2s ease, border-color 0.2s ease;
     }
 
-    .call-ctrl-btn:hover {
-      transform: scale(1.1);
+    .toggle-switch.on {
+      background: linear-gradient(135deg, var(--vein), var(--vein-deep));
+      border-color: var(--vein-deep);
     }
 
-    .call-ctrl-btn.end {
-      background: #c0392b;
-      box-shadow: 0 4px 16px rgba(192, 57, 43, 0.5);
+    .toggle-switch-knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+      transition: transform 0.2s cubic-bezier(0.34, 1.4, 0.64, 1);
     }
 
-    .call-ctrl-btn.mute {
-      background: rgba(255, 255, 255, 0.15);
-      color: #fff;
-    }
-
-    .call-ctrl-btn.mute.muted {
-      background: rgba(255, 255, 255, 0.3);
-    }
-
-    .call-duration {
-      font-size: 0.82rem;
-      color: rgba(255, 255, 255, 0.4);
-      margin-top: 8px;
-      letter-spacing: 0.05em;
+    .toggle-switch.on .toggle-switch-knob {
+      transform: translateX(18px);
     }
   </style>
 </head>
@@ -1463,29 +1172,8 @@
   <div id="modalRoot"></div>
   <div class="toast" id="toast"></div>
 
-  <!-- DM panel -->
-  <div class="dm-panel" id="dmPanel">
-    <div class="dm-scrim" id="dmScrim"></div>
-    <div class="dm-sidebar" id="dmSidebar">
-      <div class="dm-header">
-        <h2 class="display" id="dmPanelTitle">Messages</h2>
-        <button class="dm-back" id="dmCloseBtn">&times;</button>
-      </div>
-      <div id="dmBody" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;"></div>
-    </div>
-  </div>
-
-  <!-- Call overlay -->
-  <div class="call-overlay" id="callOverlay">
-    <div class="call-avatar" id="callAvatar"></div>
-    <div class="call-name" id="callName"></div>
-    <div class="call-status" id="callStatus">Calling…</div>
-    <div class="call-controls">
-      <button class="call-ctrl-btn mute" id="callMuteBtn" title="Mute">🎤</button>
-      <button class="call-ctrl-btn end" id="callEndBtn" title="End call">📵</button>
-    </div>
-    <div class="call-duration" id="callDuration"></div>
-  </div>
+  <!-- Ambient 3D scene (experimental settings feature) -->
+  <div id="ambientScene3d"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -1560,11 +1248,11 @@ function avatarHtml(name, photoURL, sizePx, avatarBorder) {
   return `<span class="avatar-circle" style="width:${size}px;height:${size}px;font-size:${Math.max(10, size * 0.4)}px;${borderStyle}">${initials(name)}</span>`;
 }
 
-async function getUserProfile(uid) {
-  if (userCache.has(uid)) return userCache.get(uid);
-  try {
-    const snap = await getDoc(doc(db, "users", uid));
-    const data = snap.exists() ? snap.data() : {};
+async function getUserProfile(uid, forceRefresh) {
+  if (!forceRefresh && userCache.has(uid)) return userCache.get(uid);
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    const data = snap.exists() ? snap.data() : {};
     const profile = {
       displayName: data.displayName || null,
       photoURL: data.photoURL || null,
@@ -1637,12 +1325,12 @@ recentPostDates
     if (profile && checkPostingStreak(profile.recentPostDates)) { earned.push("streak"); } return earned; }
 
 function badgeRowHtml(equippedBadges, sizePx) {
-  const size = sizePx || 14;
-  if (!equippedBadges || equippedBadges.length === 0) return "";
-  return equippedBadges
-    .filter(key => BADGE_INFO[key])
-    .map(key => `<img src="${BADGE_INFO[key].icon}" alt="${BADGE_INFO[key].label}" title="${BADGE_INFO[key].label}" style="width:${size}px;height:${size}px;vertical-align:middle;margin-left:2px;">`)
-    .join("");
+  const size = sizePx || 14;
+  if (!equippedBadges || equippedBadges.length === 0) return "";
+  return equippedBadges
+    .filter(key => BADGE_INFO[key])
+    .map(key => `<img src="${BADGE_INFO[key].icon}" alt="${BADGE_INFO[key].label}" title="${BADGE_INFO[key].label}" style="width:${size}px;height:${size}px;vertical-align:middle;margin-left:2px;">`)
+    .join("");
 }
 
 function timeAgo(ts) {
@@ -1688,9 +1376,8 @@ function renderAuthArea() {
     const myEquipped = (myProfile && myProfile.equippedBadges) || [];
     if (myProfile && myProfile.accentColor) applyAccentColor(myProfile.accentColor);
     authArea.innerHTML = `
-      <button class="inbox-btn" id="inboxBtn" title="Messages">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span class="inbox-badge" id="inboxBadge" style="display:none;"></span>
+      <button class="settings-btn" id="settingsBtn" title="Settings">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
       <div class="avatar-pill" id="userPill" style="cursor:pointer;">
         ${avatarHtml(name, photoURL, 26, myProfile && myProfile.avatarBorder)}
@@ -1699,11 +1386,10 @@ function renderAuthArea() {
       </div>
       <button class="btn btn-ghost btn-danger" id="signOutBtn">Sign out</button>
     `;
-    document.getElementById("inboxBtn").addEventListener("click", openDmPanel);
+    document.getElementById("settingsBtn").addEventListener("click", openSettingsModal);
     document.getElementById("userPill").addEventListener("click", openProfileModal);
     document.getElementById("signOutBtn").addEventListener("click", () => signOut(auth));
     composerCard.style.display = "block";
-    listenToUnreadDms();
   } else {
     authArea.innerHTML = `<button class="btn btn-primary" id="openAuthBtn">Sign in</button>`;
     document.getElementById("openAuthBtn").addEventListener("click", () => openAuthModal("signin"));
@@ -1812,257 +1498,215 @@ function closeAuthModal() {
   modalRoot.innerHTML = "";
 }
 
-/* ================ DM ENGINE ================ */
+/* ================ SETTINGS ================ */
 
-let dmOpen = false;
-let activeDmThread = null;
-let dmMsgUnsub = null;
-let dmThreadsUnsub = null;
-let unreadDmUnsub = null;
+const AMBIENT_3D_STORAGE_KEY = "foyer_ambient3d_enabled";
 
-function dmThreadId(uidA, uidB) {
-  return [uidA, uidB].sort().join("_");
+function isAmbient3dEnabled() {
+  return localStorage.getItem(AMBIENT_3D_STORAGE_KEY) === "1";
 }
 
-function openDmPanel() {
-  if (!currentUser) return openAuthModal("signin");
-  dmOpen = true;
-  const panel = document.getElementById("dmPanel");
-  panel.classList.add("open");
-  showDmThreadList();
+function setAmbient3dEnabled(on) {
+  localStorage.setItem(AMBIENT_3D_STORAGE_KEY, on ? "1" : "0");
+  if (on) startAmbientScene3d(); else stopAmbientScene3d();
 }
 
-function closeDmPanel() {
-  dmOpen = false;
-  activeDmThread = null;
-  if (dmMsgUnsub) { dmMsgUnsub(); dmMsgUnsub = null; }
-  document.getElementById("dmPanel").classList.remove("open");
-}
+function openSettingsModal() {
+  const on = isAmbient3dEnabled();
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal shimmer-surface" id="settingsModal">
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+        <h2 class="display">Settings</h2>
+        <p class="sub">Tune how Foyer looks and feels.</p>
 
-document.getElementById("dmScrim").addEventListener("click", closeDmPanel);
-document.getElementById("dmCloseBtn").addEventListener("click", () => {
-  if (activeDmThread) { activeDmThread = null; showDmThreadList(); }
-  else { closeDmPanel(); }
-});
-
-function showDmThreadList() {
-  activeDmThread = null;
-  if (dmMsgUnsub) { dmMsgUnsub(); dmMsgUnsub = null; }
-  document.getElementById("dmPanelTitle").textContent = "Messages";
-  const body = document.getElementById("dmBody");
-  body.innerHTML = `
-    <div class="dm-compose-row">
-      <input type="text" id="dmSearchInput" placeholder="Search users to message…">
-    </div>
-    <div class="dm-list" id="dmThreadList"><div class="dm-empty">Loading…</div></div>
-  `;
-  document.getElementById("dmSearchInput").addEventListener("input", async (e) => {
-    const q = e.target.value.trim().toLowerCase();
-    if (!q) { loadDmThreads(); return; }
-    const list = document.getElementById("dmThreadList");
-    list.innerHTML = "<div class='dm-empty'>Searching…</div>";
-    const snap = await getDocs(collection(db, "users"));
-    const results = [];
-    snap.forEach(d => {
-      if (d.id === currentUser.uid) return;
-      const data = d.data();
-      const name = (data.displayName || data.email || "").toLowerCase();
-      if (name.includes(q)) results.push({ uid: d.id, ...data });
-    });
-    if (!results.length) { list.innerHTML = "<div class='dm-empty'>No users found.</div>"; return; }
-    list.innerHTML = results.map(u => `
-      <div class="dm-thread-row" data-uid="${u.uid}">
-        ${avatarHtml(u.displayName || u.email, u.photoURL, 38, u.avatarBorder)}
-        <div class="dm-thread-info">
-          <div class="dm-thread-name">${escapeHtml(u.displayName || u.email || "User")}</div>
-          <div class="dm-thread-preview">Start a conversation</div>
+        <div class="settings-section">
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <div class="settings-row-title">Ambient 3D backdrop <span class="settings-beta-pill">Test feature</span></div>
+              <div class="settings-row-desc">Adds a soft, floating 3D scene behind the page. Experimental — may affect performance on older devices.</div>
+            </div>
+            <button type="button" class="toggle-switch ${on ? "on" : ""}" id="ambient3dToggle" role="switch" aria-checked="${on}">
+              <span class="toggle-switch-knob"></span>
+            </button>
+          </div>
         </div>
       </div>
-    `).join("");
-    list.querySelectorAll(".dm-thread-row").forEach(row => {
-      row.addEventListener("click", () => openDmConversation(row.dataset.uid, row.querySelector(".dm-thread-name").textContent));
-    });
-  });
-  loadDmThreads();
-}
-
-function loadDmThreads() {
-  const list = document.getElementById("dmThreadList");
-  if (!list) return;
-  if (dmThreadsUnsub) { dmThreadsUnsub(); dmThreadsUnsub = null; }
-  dmThreadsUnsub = onSnapshot(
-    query(collection(db, "users", currentUser.uid, "dmThreads"), orderBy("lastAt", "desc")),
-    async (snap) => {
-      if (!document.getElementById("dmThreadList")) return;
-      if (snap.empty) { list.innerHTML = "<div class='dm-empty'>No conversations yet. Search for someone above.</div>"; return; }
-      const rows = await Promise.all(snap.docs.map(async d => {
-        const data = d.data();
-        const other = userCache.has(data.withUid) ? userCache.get(data.withUid) : await getUserProfile(data.withUid);
-        const otherName = other.displayName || data.withName || "User";
-        const unread = data.unread || 0;
-        return `
-          <div class="dm-thread-row" data-uid="${data.withUid}" data-name="${escapeHtml(otherName)}">
-            ${avatarHtml(otherName, other.photoURL, 38, other.avatarBorder)}
-            <div class="dm-thread-info">
-              <div class="dm-thread-name">${escapeHtml(otherName)}</div>
-              <div class="dm-thread-preview">${escapeHtml(data.lastMsg || "")}</div>
-            </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-              <div class="dm-thread-time">${timeAgo(data.lastAt)}</div>
-              ${unread > 0 ? `<div class="dm-unread-dot"></div>` : ""}
-            </div>
-          </div>
-        `;
-      }));
-      list.innerHTML = rows.join("");
-      list.querySelectorAll(".dm-thread-row").forEach(row => {
-        row.addEventListener("click", () => openDmConversation(row.dataset.uid, row.dataset.name));
-      });
-    }
-  );
-}
-
-function openDmConversation(otherUid, otherName) {
-  activeDmThread = dmThreadId(currentUser.uid, otherUid);
-  if (dmMsgUnsub) { dmMsgUnsub(); dmMsgUnsub = null; }
-  document.getElementById("dmPanelTitle").textContent = otherName;
-  const body = document.getElementById("dmBody");
-  body.innerHTML = `
-    <div class="dm-conversation">
-      <div class="dm-messages" id="dmMessages"><div class="dm-empty">Loading…</div></div>
-      <div class="dm-input-row">
-        <input type="text" id="dmMsgInput" placeholder="Message ${escapeHtml(otherName)}…" maxlength="1000" autocomplete="off">
-        <button class="call-ctrl-btn mute" id="dmCallBtn" title="Call" style="width:40px;height:40px;font-size:1rem;background:rgba(142,151,168,0.15);">📞</button>
-        <button class="dm-send-btn" id="dmSendBtn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        </button>
-      </div>
     </div>
   `;
 
-  const otherProfile = userCache.get(otherUid);
-  document.getElementById("dmCallBtn").addEventListener("click", () => startCall(otherUid, otherName, otherProfile));
+  setTimeout(() => playShimmer(document.getElementById("settingsModal")), 50);
 
-  const input = document.getElementById("dmMsgInput");
-  const sendBtn = document.getElementById("dmSendBtn");
+  const backdrop = document.getElementById("modalBackdrop");
+  const closeBtn = document.getElementById("modalCloseBtn");
+  const toggle = document.getElementById("ambient3dToggle");
 
-  async function sendDmMsg() {
-    const text = input.value.trim();
-    if (!text) return;
-    input.value = "";
-    const threadId = activeDmThread;
-    const now = serverTimestamp();
-    try {
-      await addDoc(collection(db, "dms", threadId, "messages"), {
-        text, senderId: currentUser.uid,
-        senderName: myProfile?.displayName || currentUser.email,
-        createdAt: now
-      });
-      const myName = myProfile?.displayName || currentUser.email;
-      const otherRef = doc(db, "users", otherUid, "dmThreads", currentUser.uid);
-      const myRef = doc(db, "users", currentUser.uid, "dmThreads", otherUid);
-      await setDoc(myRef, { withUid: otherUid, withName: otherName, lastMsg: text, lastAt: now, unread: 0 }, { merge: true });
-      await setDoc(otherRef, { withUid: currentUser.uid, withName: myName, lastMsg: text, lastAt: now, unread: increment(1) }, { merge: true });
-    } catch (err) { showToast("Couldn't send message"); }
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeAuthModal(); });
+  closeBtn.addEventListener("click", closeAuthModal);
+
+  toggle.addEventListener("click", () => {
+    const nowOn = !toggle.classList.contains("on");
+    toggle.classList.toggle("on", nowOn);
+    toggle.setAttribute("aria-checked", String(nowOn));
+    setAmbient3dEnabled(nowOn);
+  });
+}
+
+/* ================ AMBIENT 3D SCENE (experimental) ================ */
+
+let ambient3dState = null;
+let ambient3dScriptPromise = null;
+
+function loadThreeJs() {
+  if (window.THREE) return Promise.resolve();
+  if (ambient3dScriptPromise) return ambient3dScriptPromise;
+  ambient3dScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+    script.onload = resolve;
+    script.onerror = () => reject(new Error("Couldn't load 3D engine"));
+    document.head.appendChild(script);
+  });
+  return ambient3dScriptPromise;
+}
+
+function readAccentHex() {
+  const styles = getComputedStyle(document.documentElement);
+  const vein = styles.getPropertyValue("--vein").trim() || "#8E97A8";
+  const veinDeep = styles.getPropertyValue("--vein-deep").trim() || "#6F7A8E";
+  return { vein, veinDeep };
+}
+
+async function startAmbientScene3d() {
+  const container = document.getElementById("ambientScene3d");
+  if (!container) return;
+  if (ambient3dState) { container.classList.add("active"); return; }
+
+  try {
+    await loadThreeJs();
+  } catch (err) {
+    showToast("Couldn't enable the 3D backdrop");
+    return;
   }
 
-  sendBtn.addEventListener("click", sendDmMsg);
-  input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDmMsg(); } });
+  const THREE = window.THREE;
+  const { vein, veinDeep } = readAccentHex();
 
-  const q = query(collection(db, "dms", activeDmThread, "messages"), orderBy("createdAt", "asc"));
-  dmMsgUnsub = onSnapshot(q, snap => {
-    const msgs = document.getElementById("dmMessages");
-    if (!msgs) return;
-    if (snap.empty) { msgs.innerHTML = "<div class='dm-empty'>Say hello 👋</div>"; return; }
-    msgs.innerHTML = snap.docs.map(d => {
-      const m = d.data();
-      const mine = m.senderId === currentUser.uid;
-      return `<div class="dm-msg ${mine ? "mine" : "theirs"}">${escapeHtml(m.text)}<div class="dm-msg-time">${timeAgo(m.createdAt)}</div></div>`;
-    }).join("");
-    msgs.scrollTop = msgs.scrollHeight;
-  });
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 0, 14);
 
-  setDoc(doc(db, "users", currentUser.uid, "dmThreads", otherUid), { unread: 0 }, { merge: true });
-}
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000000, 0);
+  container.innerHTML = "";
+  container.appendChild(renderer.domElement);
 
-function listenToUnreadDms() {
-  if (!currentUser || unreadDmUnsub) return;
-  unreadDmUnsub = onSnapshot(collection(db, "users", currentUser.uid, "dmThreads"), snap => {
-    const badge = document.getElementById("inboxBadge");
-    if (!badge) return;
-    let total = 0;
-    snap.forEach(d => { total += d.data().unread || 0; });
-    if (total > 0) { badge.textContent = total > 9 ? "9+" : total; badge.style.display = "flex"; }
-    else { badge.style.display = "none"; }
-  });
-}
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+  scene.add(ambientLight);
+  const keyLight = new THREE.DirectionalLight(new THREE.Color(vein), 0.9);
+  keyLight.position.set(4, 6, 8);
+  scene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(new THREE.Color(veinDeep), 0.4);
+  rimLight.position.set(-6, -3, -4);
+  scene.add(rimLight);
 
-/* ================ CALL ENGINE ================ */
+  const geometries = [
+    new THREE.IcosahedronGeometry(1, 0),
+    new THREE.OctahedronGeometry(1, 0),
+    new THREE.TorusGeometry(0.7, 0.25, 12, 28),
+    new THREE.TetrahedronGeometry(1, 0)
+  ];
 
-let callTimer = null;
-let callSeconds = 0;
-let isMuted = false;
-let localStream = null;
-let peerConn = null;
-let callListenerUnsub = null;
-
-function startCall(otherUid, otherName, otherProfile) {
-  const overlay = document.getElementById("callOverlay");
-  const avatarEl = document.getElementById("callAvatar");
-  const nameEl = document.getElementById("callName");
-  const statusEl = document.getElementById("callStatus");
-  const durationEl = document.getElementById("callDuration");
-  const muteBtn = document.getElementById("callMuteBtn");
-  const endBtn = document.getElementById("callEndBtn");
-
-  const avatarContent = (otherProfile && otherProfile.photoURL)
-    ? `<img src="${escapeHtml(otherProfile.photoURL)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
-    : initials(otherName);
-  avatarEl.innerHTML = avatarContent;
-  nameEl.textContent = otherName;
-  statusEl.textContent = "Calling…";
-  durationEl.textContent = "";
-  isMuted = false;
-  muteBtn.textContent = "🎤";
-  muteBtn.classList.remove("muted");
-  callSeconds = 0;
-  overlay.classList.add("active");
-
-  navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-    .then(stream => {
-      localStream = stream;
-      statusEl.textContent = "Connected";
-      callTimer = setInterval(() => {
-        callSeconds++;
-        const m = String(Math.floor(callSeconds / 60)).padStart(2, "0");
-        const s = String(callSeconds % 60).padStart(2, "0");
-        durationEl.textContent = `${m}:${s}`;
-      }, 1000);
-    })
-    .catch(() => {
-      statusEl.textContent = "Mic access denied — voice disabled";
-      callTimer = setInterval(() => {
-        callSeconds++;
-        const m = String(Math.floor(callSeconds / 60)).padStart(2, "0");
-        const s = String(callSeconds % 60).padStart(2, "0");
-        durationEl.textContent = `${m}:${s}`;
-      }, 1000);
+  const shapes = [];
+  const SHAPE_COUNT = 9;
+  for (let i = 0; i < SHAPE_COUNT; i++) {
+    const geo = geometries[i % geometries.length];
+    const useAccent = i % 3 === 0;
+    const material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(useAccent ? vein : "#FFFFFF"),
+      roughness: 0.55,
+      metalness: 0.15,
+      transparent: true,
+      opacity: useAccent ? 0.5 : 0.85
     });
+    const mesh = new THREE.Mesh(geo, material);
+    const scale = 0.5 + Math.random() * 0.9;
+    mesh.scale.setScalar(scale);
+    mesh.position.set(
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 12,
+      (Math.random() - 0.5) * 10 - 4
+    );
+    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    mesh.userData.spin = {
+      x: (Math.random() - 0.5) * 0.003,
+      y: (Math.random() - 0.5) * 0.004,
+      z: (Math.random() - 0.5) * 0.002
+    };
+    mesh.userData.bob = {
+      amp: 0.4 + Math.random() * 0.6,
+      speed: 0.4 + Math.random() * 0.5,
+      offset: Math.random() * Math.PI * 2,
+      baseY: mesh.position.y
+    };
+    scene.add(mesh);
+    shapes.push(mesh);
+  }
 
-  muteBtn.onclick = () => {
-    isMuted = !isMuted;
-    if (localStream) localStream.getAudioTracks().forEach(t => { t.enabled = !isMuted; });
-    muteBtn.classList.toggle("muted", isMuted);
-    muteBtn.textContent = isMuted ? "🔇" : "🎤";
-  };
+  let frameId = null;
+  let mouseX = 0, mouseY = 0;
+  const clock = new THREE.Clock();
 
-  endBtn.onclick = () => {
-    overlay.classList.remove("active");
-    if (callTimer) { clearInterval(callTimer); callTimer = null; }
-    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-    callSeconds = 0;
-    durationEl.textContent = "";
-  };
+  function onPointerMove(e) {
+    mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+    mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+  }
+
+  function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  function animate() {
+    frameId = requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+    shapes.forEach(mesh => {
+      mesh.rotation.x += mesh.userData.spin.x;
+      mesh.rotation.y += mesh.userData.spin.y;
+      mesh.rotation.z += mesh.userData.spin.z;
+      const b = mesh.userData.bob;
+      mesh.position.y = b.baseY + Math.sin(t * b.speed + b.offset) * b.amp * 0.15;
+    });
+    camera.position.x += (mouseX * 1.5 - camera.position.x) * 0.02;
+    camera.position.y += (-mouseY * 1.0 - camera.position.y) * 0.02;
+    camera.lookAt(0, 0, 0);
+    renderer.render(scene, camera);
+  }
+
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("resize", onResize);
+  animate();
+
+  container.classList.add("active");
+
+  ambient3dState = { scene, camera, renderer, container, onPointerMove, onResize, get frameId() { return frameId; }, stop() {
+    if (frameId) cancelAnimationFrame(frameId);
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("resize", onResize);
+    renderer.dispose();
+    container.classList.remove("active");
+    container.innerHTML = "";
+  } };
+}
+
+function stopAmbientScene3d() {
+  if (ambient3dState) {
+    ambient3dState.stop();
+    ambient3dState = null;
+  }
 }
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5MB raw file cap, before compression
@@ -2901,7 +2545,7 @@ onAuthStateChanged(auth, async (user) => {
   currentUser = user;
   myProfile = null;
   if (user) {
-    myProfile = await getUserProfile(user.uid);
+    myProfile = await getUserProfile(user.uid, true);
     userCache.set(user.uid, myProfile);
   }
   renderAuthArea();
@@ -2914,6 +2558,7 @@ onAuthStateChanged(auth, async (user) => {
 
 listenToPosts();
 setTimeout(() => playShimmer(topbar), 300);
+if (isAmbient3dEnabled()) startAmbientScene3d();
 
   </script>
 </body>
